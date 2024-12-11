@@ -1,46 +1,51 @@
 import pandas as pd
 import re
 
-# Caminho do arquivo CSV
-file_path = "clientes.csv"
+# Função para processar a coluna CLI_NUMERO
+def processar_numero(numero, complemento):
+    if pd.isna(numero):
+        return "", complemento if not pd.isna(complemento) else ""  # Se não há número, não altera o complemento
+
+    # Remove pontos e traços
+    numero = re.sub(r"[.-]", "", str(numero))
+
+    # Tentar encontrar o número principal
+    match = re.match(r"(\d+)(.*)", numero)
+    if match:
+        primeiro_numero = match.group(1)  # O número principal
+        restante = match.group(2).strip()  # O restante após o número principal
+
+        # Adiciona o restante ao complemento
+        complemento = (str(complemento) if not pd.isna(complemento) else "").strip()  # Tratar NaN como vazio
+        if restante:
+            complemento = f"{complemento} {restante}".strip()
+
+        return primeiro_numero, complemento
+
+    # Caso não haja número principal, mover tudo para o complemento
+    complemento = (str(complemento) if not pd.isna(complemento) else "").strip()
+    complemento = f"{complemento} {numero}".strip()
+
+    return "", complemento
 
 # Carregar o arquivo CSV
-df = pd.read_csv(file_path, sep=";", encoding="utf-8")
+arquivo_entrada = "clientes.csv"
+arquivo_saida = "clientes_atualizado_numero.csv"
 
-# Verificar se as colunas CLI_NUMERO e CLI_COMPLEMENTO existem
-numero_col = "CLI_NUMERO"
-complemento_col = "CLI_COMPLEMENTO"
+# Ler o arquivo CSV
+df = pd.read_csv(arquivo_entrada, sep=";", encoding="utf-8")
 
-if numero_col not in df.columns:
-    raise ValueError(f"A coluna '{numero_col}' não foi encontrada no arquivo.")
+# Garantir que as colunas necessárias existam
+if "CLI_NUMERO" in df.columns and "CLI_COMPLEMENTO" in df.columns:
+    # Aplicar a função para processar CLI_NUMERO e CLI_COMPLEMENTO
+    df[["CLI_NUMERO", "CLI_COMPLEMENTO"]] = df.apply(
+        lambda row: processar_numero(row["CLI_NUMERO"], row["CLI_COMPLEMENTO"]),
+        axis=1,
+        result_type="expand"
+    )
 
-# Garantir que a coluna CLI_COMPLEMENTO exista
-if complemento_col not in df.columns:
-    df[complemento_col] = ""
-
-# Função para separar números e não números
-def processar_numero(valor):
-    if isinstance(valor, str):
-        # Extrair apenas números
-        numeros = re.findall(r"\d+", valor)
-        numeros = "".join(numeros) if numeros else ""
-        # Extrair o restante (não numérico)
-        nao_numerico = re.sub(r"\d+", "", valor).strip()
-        return numeros, nao_numerico
-    return valor, ""  # Retorna vazio para não numéricos caso valor não seja string
-
-# Aplicar a função para processar CLI_NUMERO
-df[numero_col], complementos = zip(*df[numero_col].apply(processar_numero))
-
-# Adicionar os complementos existentes na coluna CLI_COMPLEMENTO
-df[complemento_col] = df[complemento_col].fillna("") + " " + pd.Series(complementos)
-df[complemento_col] = df[complemento_col].str.strip()  # Remover espaços extras
-
-# Remover pontos que estão sozinhos na coluna CLI_COMPLEMENTO
-df[complemento_col] = df[complemento_col].apply(lambda x: "" if x.strip() == "." else x)
-
-# Salvar o arquivo atualizado
-output_file = "clientes_atualizado_numeros.csv"
-df.to_csv(output_file, index=False, sep=";", encoding="utf-8")
-
-print(f"Arquivo atualizado salvo em: {output_file}")
+    # Salvar o resultado em um novo arquivo
+    df.to_csv(arquivo_saida, index=False, sep=";", encoding="utf-8")
+    print(f"Arquivo processado e salvo como {arquivo_saida}")
+else:
+    print("As colunas CLI_NUMERO e CLI_COMPLEMENTO não foram encontradas no arquivo.")
